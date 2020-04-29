@@ -35,7 +35,7 @@ def scan_known_people(known_people_folder): # 아는 사람의 얼굴과 이름�
     print(encodings[0])
     return known_names, known_face_encodings
 
-def upload_unknown_file(upload_file): #업로드된 파일들 검사 후 배열에 저장
+def upload_unknown_file(upload_file, upload_name, flag): #업로드된 파일들 검사 후 배열에 저장
     upload_image = face_recognition.load_image_file(upload_file)
 
     if(max(upload_image.shape) > 1600):
@@ -46,10 +46,18 @@ def upload_unknown_file(upload_file): #업로드된 파일들 검사 후 배열�
     upload_encodings = face_recognition.face_encodings(upload_image)
     #print(upload_encodings)
 
-    f=open('unknown_encodings_save.json', 'a', encoding="utf-8")
-    json.dump(, indent="\t")
-    np.savetxt(f, upload_encodings, delimiter=',', newline='\n')
-    f.close()
+
+    if(flag==0): #처음 실행될 때
+        upload_data = {}
+        upload_data["unknowns"] = []
+    else:
+        with open("unknown_encodings_save.json", "r") as f:
+            upload_data = json.load(f)
+
+
+    upload_data["unknowns"].append({"name":upload_name, "encodings":upload_encodings.tolist()})
+    with open("unknown_encodings_save.json", "w", encoding="utf=8") as json_file:
+        json.dump(upload_data, json_file, ensure_ascii=False, indent="\t")
 
 
 def print_result(filename, name, distance, show_distance=False):
@@ -58,13 +66,9 @@ def print_result(filename, name, distance, show_distance=False):
     else:
         print("{},{}".format(filename, name))
 
-"""그러면
-파일이 하나씩 들어올 때마다 upload_btn_click로 파일 개개마다 검사하여 인코딩값 저장
-그리고 가장 마지막에 테스트 이미지를 실행시키도록
-"""
 
-
-def selfie_upload_btn(selfie_file, user_id):
+def selfie_upload_btn(selfie_file, user_id): # 유저의 셀피를 올려 자신이 나온 사진을 다운로드 받는 함수
+    # 유저의 셀피를 분석
     img = face_recognition.load_image_file(selfie_file)
     user_encodings = face_recognition.face_encodings(img)
 
@@ -75,19 +79,47 @@ def selfie_upload_btn(selfie_file, user_id):
 
     # user_id path 처리
 
-
-    compare_image(selfie_file, user_id, user_encodings, 0.3, False)
+    # 사진들 속에서 유저의 얼굴이 나온 사진을 검출
+    compare_image(img, user_id, user_encodings, 0.3, False)
 
 
 def compare_image(image_to_check, known_names, known_face_encodings, tolerance=0.6, show_distance=False):
-
+    # 유저의 얼굴이 포함된 사진 이름 리스트
     user_faces = []
 
-    f=open('unknown_encoding_save.txt', 'r')
-    # load할 파일이 비었을?
-    unknown_encodings = np.loadtxt(f, delimiter=',')
-    f.close()
+    with open("unknown_encodings_save.json", "r") as json_file:
+        json_data = json.load(json_file)
 
+
+    for unknown in json_data['unknowns']:
+        unknown_encodings = np.array(unknown['encodings'])
+        number_of_people = unknown_encodings.ndim
+
+        if(number_of_people==1): # 사진 속 사람이 한 명일 경우
+            distances = face_recognition.face_distance(known_face_encodings, unknown_encodings)
+            result = list(distance <= tolerance)
+
+            if True in reult:
+                user_faces.append(unknown['name'])
+
+        else: # 사진 속에 2명 이상의 사람이 있을 경우
+            for unknown_encoding in unknown_encodings:
+                distances = face_recognition.face_distance(known_face_encodings, unknown_encoding)
+                result = list(distance <= tolerance)
+
+                if True in reult:
+                    user_faces.append(unknown['name'])
+                    continue
+
+    return user_faces
+
+    """
+    if not unknown_encodings.any():
+        # print out fact that no faces were found in image
+        print_result(image_to_check, "no_persons_found", None, show_distance)
+    """
+
+"""
     n=len(unknown_encodings)
 
     if not unknown_encodings.any():
@@ -100,7 +132,7 @@ def compare_image(image_to_check, known_names, known_face_encodings, tolerance=0
             result = list(distances <= tolerance)
 
             if True in result:
-                user_faces.append(picture_name)
+                user_faces.append(unknown_name)
                 [print_result(image_to_check, name, distance, show_distance) for is_match, name, distance in zip(result, known_names, distances) if is_match]
             else:
                 print_result(image_to_check, "unknown_person", None, show_distance)
@@ -108,14 +140,12 @@ def compare_image(image_to_check, known_names, known_face_encodings, tolerance=0
         distances = face_recognition.face_distance(known_face_encodings, unknown_encodings)
         result = list(distances <= tolerance)
 
-        print("----------------------")
-        print(unknown_encodings)
 
         if True in result:
             [print_result(image_to_check, name, distance, show_distance) for is_match, name, distance in zip(result, known_names, distances) if is_match]
         else:
             print_result(image_to_check, "unknown_person", None, show_distance)
-
+"""
 
 
 def image_files_in_folder(folder): # pwd 효과
@@ -159,7 +189,7 @@ def main(known_people_folder, image_to_check, cpus, tolerance, show_distance):
     if (sys.version_info < (3, 4)) and cpus != 1:
         click.echo("WARNING: Multi-processing support requires Python 3.4 or greater. Falling back to single-threaded processing!")
         cpus = 1
-
+"""
     if os.path.isdir(image_to_check):
         if cpus == 1:
             [test_image(image_file, known_names, known_face_encodings, tolerance, show_distance) for image_file in image_files_in_folder(image_to_check)]
@@ -168,6 +198,6 @@ def main(known_people_folder, image_to_check, cpus, tolerance, show_distance):
     else:
         test_image(image_to_check, known_names, known_face_encodings, tolerance, show_distance)
 
-
+"""
 if __name__ == "__main__":
     main()
