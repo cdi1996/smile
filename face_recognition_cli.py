@@ -10,6 +10,8 @@ import sys
 import PIL.Image
 import numpy as np
 
+import json
+from collections import OrderedDict
 
 def scan_known_people(known_people_folder): # 아는 사람의 얼굴과 이름을 배열에 append
     known_names = []
@@ -44,7 +46,8 @@ def upload_unknown_file(upload_file): #업로드된 파일들 검사 후 배열�
     upload_encodings = face_recognition.face_encodings(upload_image)
     #print(upload_encodings)
 
-    f=open('unknown_encodings_save.txt', 'a')
+    f=open('unknown_encodings_save.json', 'a', encoding="utf-8")
+    json.dump(, indent="\t")
     np.savetxt(f, upload_encodings, delimiter=',', newline='\n')
     f.close()
 
@@ -78,6 +81,8 @@ def selfie_upload_btn(selfie_file, user_id):
 
 def compare_image(image_to_check, known_names, known_face_encodings, tolerance=0.6, show_distance=False):
 
+    user_faces = []
+
     f=open('unknown_encoding_save.txt', 'r')
     # load할 파일이 비었을?
     unknown_encodings = np.loadtxt(f, delimiter=',')
@@ -85,15 +90,17 @@ def compare_image(image_to_check, known_names, known_face_encodings, tolerance=0
 
     n=len(unknown_encodings)
 
+    if not unknown_encodings.any():
+        # print out fact that no faces were found in image
+        print_result(image_to_check, "no_persons_found", None, show_distance)
+
     if n!=128: # 사진 한명 이상일 경우.....
         for unknown_encoding in unknown_encodings:
             distances = face_recognition.face_distance(known_face_encodings, unknown_encoding)
             result = list(distances <= tolerance)
 
-            print("====================")
-            print(unknown_encoding)
-
             if True in result:
+                user_faces.append(picture_name)
                 [print_result(image_to_check, name, distance, show_distance) for is_match, name, distance in zip(result, known_names, distances) if is_match]
             else:
                 print_result(image_to_check, "unknown_person", None, show_distance)
@@ -109,10 +116,6 @@ def compare_image(image_to_check, known_names, known_face_encodings, tolerance=0
         else:
             print_result(image_to_check, "unknown_person", None, show_distance)
 
-
-    if not unknown_encodings.any():
-        # print out fact that no faces were found in image
-        print_result(image_to_check, "no_persons_found", None, show_distance)
 
 
 def image_files_in_folder(folder): # pwd 효과
