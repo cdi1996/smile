@@ -93,7 +93,7 @@ def compare_image(image_to_check, known_names, known_face_encodings, tolerance=0
 
     for unknown in json_data['unknowns']:
         unknown_encodings = np.array(unknown['encodings'])
-        number_of_people = unknown_encodings.ndim
+        number_of_people = unknown_encodings.ndim # 한 명인지 한 명 이상인지만 판단
 
         if(number_of_people==1): # 사진 속 사람이 한 명일 경우
             distances = face_recognition.face_distance(known_face_encodings, unknown_encodings)
@@ -103,6 +103,10 @@ def compare_image(image_to_check, known_names, known_face_encodings, tolerance=0
                 user_faces.append(unknown['name'])
 
         else: # 사진 속에 2명 이상의 사람이 있을 경우
+            number_of_people = unknown_encodings.shape[0] # 몇 명인지 정확하게
+            # 유저가 사진에 몇명이 나왔는 지 여부 확인
+
+
             for unknown_encoding in unknown_encodings:
                 distances = face_recognition.face_distance(known_face_encodings, unknown_encoding)
                 result = list(distance <= tolerance)
